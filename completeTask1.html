@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PDF Download and Content Calendar</title>
+  <link href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css" rel="stylesheet">
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+    }
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+    }
+    .form-group {
+      margin-bottom: 20px;
+    }
+    button {
+      background-color: #007bff;
+      color: white;
+      padding: 10px 20px;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #0056b3;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+    }
+    table, th, td {
+      border: 1px solid #ddd;
+    }
+    th, td {
+      padding: 10px;
+      text-align: left;
+    }
+    th {
+      background-color: #f4f4f4;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Content Calendar PDF Generator</h1>
+    <div class="form-group">
+      <label for="start-date-picker">Select Start Date:</label>
+      <input id="start-date-picker" type="text" placeholder="Select start date" />
+    </div>
+    <div class="form-group">
+      <label for="end-date-picker">Select End Date:</label>
+      <input id="end-date-picker" type="text" placeholder="Select end date" />
+    </div>
+    <button id="filter-data">Filter Data</button>
+    <button id="generate-pdf" style="margin-left: 10px; display: none;">Download PDF</button>
+
+    <div id="data-display">
+      <!-- Filtered data will be displayed here -->
+    </div>
+  </div>
+
+  <!-- Include Libraries -->
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.4.0/jspdf.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable"></script>
+
+  <script>
+    // Sample Data
+    const dataSet = [
+      {
+        date: "2025-01-10",
+        title: "Project A",
+        description: "Complete project A documentation",
+        tags: ["documentation", "project"],
+        progress: 80, // percentage
+        meta: { priority: "high", team: "alpha" },
+      },
+      {
+        date: "2025-01-12",
+        title: "Team Meeting",
+        description: "Weekly team sync-up",
+        tags: ["meeting"],
+        progress: 100,
+        meta: { priority: "low", team: "beta" },
+      },
+      {
+        date: "2025-01-15",
+        title: "Code Review",
+        description: "Review code for module X",
+        tags: ["code", "review"],
+        progress: 50,
+        meta: { priority: "medium", team: "gamma" },
+      },
+    ];
+
+    // Filter data based on date range
+    function filterDataByDate(dataSet, startDate, endDate) {
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+
+      return dataSet.filter((item) => {
+        const itemDate = new Date(item.date);
+        return itemDate >= start && itemDate <= end;
+      });
+    }
+
+    // Display filtered data in a table
+    function displayFilteredData(data) {
+      const displayDiv = document.getElementById("data-display");
+      displayDiv.innerHTML = ""; // Clear previous content
+
+      if (data.length === 0) {
+        displayDiv.innerHTML = "<p>No data found for the selected date range.</p>";
+        return;
+      }
+
+      const table = document.createElement("table");
+      const thead = document.createElement("thead");
+      const tbody = document.createElement("tbody");
+
+      // Table headers
+      thead.innerHTML = `
+        <tr>
+          <th>Date</th>
+          <th>Title</th>
+          <th>Description</th>
+          <th>Tags</th>
+          <th>Progress</th>
+          <th>Meta</th>
+        </tr>
+      `;
+
+      // Table rows
+      data.forEach((item) => {
+        const row = document.createElement("tr");
+        row.innerHTML = `
+          <td>${item.date}</td>
+          <td>${item.title}</td>
+          <td>${item.description}</td>
+          <td>${item.tags.join(", ")}</td>
+          <td>${item.progress}%</td>
+          <td>${JSON.stringify(item.meta)}</td>
+        `;
+        tbody.appendChild(row);
+      });
+
+      table.appendChild(thead);
+      table.appendChild(tbody);
+      displayDiv.appendChild(table);
+    }
+
+    // Generate and download PDF
+    function generatePDF(data) {
+      const { jsPDF } = window.jspdf;
+      const pdf = new jsPDF();
+
+      pdf.text("Filtered Data Report", 10, 10);
+
+      // Convert data into a table format
+      const tableData = data.map((item) => [
+        item.date,
+        item.title,
+        item.description,
+        item.tags.join(", "),
+        `${item.progress}%`,
+        JSON.stringify(item.meta),
+      ]);
+
+      pdf.autoTable({
+        head: [["Date", "Title", "Description", "Tags", "Progress", "Meta"]],
+        body: tableData,
+      });
+
+      // Save PDF
+      pdf.save("Filtered_Data_Report.pdf");
+    }
+
+    // Front-end interaction
+    let selectedStartDate = null;
+    let selectedEndDate = null;
+
+    flatpickr("#start-date-picker", {
+      onChange: (dates) => {
+        selectedStartDate = dates[0];
+      },
+    });
+
+    flatpickr("#end-date-picker", {
+      onChange: (dates) => {
+        selectedEndDate = dates[0];
+      },
+    });
+
+    document.getElementById("filter-data").addEventListener("click", () => {
+      if (!selectedStartDate || !selectedEndDate) {
+        alert("Please select both start and end dates.");
+        return;
+      }
+
+      const filteredData = filterDataByDate(
+        dataSet,
+        selectedStartDate,
+        selectedEndDate
+      );
+
+      displayFilteredData(filteredData);
+      
+      // Show the "Download PDF" button once data is filtered and displayed
+      document.getElementById("generate-pdf").style.display = "inline-block";
+    });
+
+    document.getElementById("generate-pdf").addEventListener("click", () => {
+      if (!selectedStartDate || !selectedEndDate) {
+        alert("Please select both start and end dates.");
+        return;
+      }
+
+      const filteredData = filterDataByDate(
+        dataSet,
+        selectedStartDate,
+        selectedEndDate
+      );
+
+      if (filteredData.length === 0) {
+        alert("No data found for the selected date range.");
+        return;
+      }
+
+      generatePDF(filteredData);
+    });
+  </script>
+</body>
+</html>
