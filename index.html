@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>PDF Download and Content Calendar</title>
+  <title>Refined JSON PDF Generator</title>
   <link href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css" rel="stylesheet">
   <style>
     body {
@@ -28,26 +28,34 @@
     button:hover {
       background-color: #0056b3;
     }
-    table {
+    textarea {
       width: 100%;
-      border-collapse: collapse;
-      margin-top: 20px;
+      height: 150px;
+      margin-bottom: 20px;
     }
-    table, th, td {
+    .list-section {
+      margin-top: 30px;
+    }
+    .list-preview {
+      margin-bottom: 20px;
       border: 1px solid #ddd;
-    }
-    th, td {
       padding: 10px;
-      text-align: left;
+      background-color: #f9f9f9;
     }
-    th {
-      background-color: #f4f4f4;
+    .list-preview-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .list-preview-header h4 {
+      margin: 0;
     }
   </style>
 </head>
 <body>
   <div class="container">
-    <h1>Content Calendar PDF Generator</h1>
+    <h1>Data Filter & PDF Generator</h1>
+
     <div class="form-group">
       <label for="start-date-picker">Select Start Date:</label>
       <input id="start-date-picker" type="text" placeholder="Select start date" />
@@ -57,11 +65,21 @@
       <input id="end-date-picker" type="text" placeholder="Select end date" />
     </div>
     <button id="filter-data">Filter Data</button>
-    <button id="generate-pdf" style="margin-left: 10px; display: none;">Download PDF</button>
 
-    <div id="data-display">
-      <!-- Filtered data will be displayed here -->
+    <div id="data-display"></div>
+
+    <div class="list-section">
+      <h3>Edit Data</h3>
+      <textarea id="editable-json" placeholder="Filtered data will appear here for editing..."></textarea>
+      <button id="add-to-list">Add to Download File</button>
     </div>
+
+    <div class="list-section">
+      <h3>Preview of Download File</h3>
+      <div id="preview-display"></div>
+    </div>
+
+    <button id="generate-pdf" style="display: none;">Download PDF</button>
   </div>
 
   <!-- Include Libraries -->
@@ -70,131 +88,82 @@
   <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable"></script>
 
   <script>
-    // Sample Data
     const dataSet = [
-      {
-        date: "2025-01-10",
-        title: "Project A",
-        description: "Complete project A documentation",
-        tags: ["documentation", "project"],
-        progress: 80, // percentage
-        meta: { priority: "high", team: "alpha" },
-      },
-      {
-        date: "2025-01-12",
-        title: "Team Meeting",
-        description: "Weekly team sync-up",
-        tags: ["meeting"],
-        progress: 100,
-        meta: { priority: "low", team: "beta" },
-      },
-      {
-        date: "2025-01-15",
-        title: "Code Review",
-        description: "Review code for module X",
-        tags: ["code", "review"],
-        progress: 50,
-        meta: { priority: "medium", team: "gamma" },
-      },
+      { date: "2025-01-10", title: "Project A", description: "Complete documentation", progress: 80 },
+      { date: "2025-01-12", title: "Team Meeting", description: "Weekly sync-up", progress: 100 },
+      { date: "2025-01-15", title: "Code Review", description: "Review module X", progress: 50 },
     ];
 
-    // Filter data based on date range
+    let selectedStartDate = null;
+    let selectedEndDate = null;
+    let downloadLists = [];
+
+    flatpickr("#start-date-picker", { onChange: (dates) => (selectedStartDate = dates[0]) });
+    flatpickr("#end-date-picker", { onChange: (dates) => (selectedEndDate = dates[0]) });
+
     function filterDataByDate(dataSet, startDate, endDate) {
       const start = new Date(startDate);
       const end = new Date(endDate);
-
       return dataSet.filter((item) => {
         const itemDate = new Date(item.date);
         return itemDate >= start && itemDate <= end;
       });
     }
 
-    // Display filtered data in a table
     function displayFilteredData(data) {
       const displayDiv = document.getElementById("data-display");
-      displayDiv.innerHTML = ""; // Clear previous content
+      displayDiv.innerHTML = "";
 
       if (data.length === 0) {
         displayDiv.innerHTML = "<p>No data found for the selected date range.</p>";
         return;
       }
 
-      const table = document.createElement("table");
-      const thead = document.createElement("thead");
-      const tbody = document.createElement("tbody");
-
-      // Table headers
-      thead.innerHTML = `
-        <tr>
-          <th>Date</th>
-          <th>Title</th>
-          <th>Description</th>
-          <th>Tags</th>
-          <th>Progress</th>
-          <th>Meta</th>
-        </tr>
-      `;
-
-      // Table rows
-      data.forEach((item) => {
-        const row = document.createElement("tr");
-        row.innerHTML = `
-          <td>${item.date}</td>
-          <td>${item.title}</td>
-          <td>${item.description}</td>
-          <td>${item.tags.join(", ")}</td>
-          <td>${item.progress}%</td>
-          <td>${JSON.stringify(item.meta)}</td>
-        `;
-        tbody.appendChild(row);
-      });
-
-      table.appendChild(thead);
-      table.appendChild(tbody);
-      displayDiv.appendChild(table);
+      const textArea = document.getElementById("editable-json");
+      textArea.value = data
+        .map((item) => `Date: ${item.date}\nTitle: ${item.title}\nDescription: ${item.description}\nProgress: ${item.progress}%\n`)
+        .join("\n---\n\n");
     }
 
-    // Generate and download PDF
-    function generatePDF(data) {
+    function updatePreview() {
+      const previewDiv = document.getElementById("preview-display");
+      previewDiv.innerHTML = "";
+
+      downloadLists.forEach((list, index) => {
+        const section = document.createElement("div");
+        section.className = "list-preview";
+        section.innerHTML = `
+          <div class="list-preview-header">
+            <h4>List ${index + 1}</h4>
+            <button onclick="removeList(${index})">Remove</button>
+          </div>
+          <pre>${list}</pre>
+        `;
+        previewDiv.appendChild(section);
+      });
+
+      document.getElementById("generate-pdf").style.display = downloadLists.length > 0 ? "inline-block" : "none";
+    }
+
+    function generatePDF(lists) {
       const { jsPDF } = window.jspdf;
       const pdf = new jsPDF();
 
-      pdf.text("Filtered Data Report", 10, 10);
+      lists.forEach((list, index) => {
+        const title = `List ${index + 1}`;
+        const lines = list.split("\n");
 
-      // Convert data into a table format
-      const tableData = data.map((item) => [
-        item.date,
-        item.title,
-        item.description,
-        item.tags.join(", "),
-        `${item.progress}%`,
-        JSON.stringify(item.meta),
-      ]);
-
-      pdf.autoTable({
-        head: [["Date", "Title", "Description", "Tags", "Progress", "Meta"]],
-        body: tableData,
+        pdf.text(title, 10, pdf.previousAutoTable?.finalY || 10);
+        pdf.autoTable({ head: [["Key", "Value"]], body: lines.map((line) => line.split(": ")) });
       });
 
-      // Save PDF
-      pdf.save("Filtered_Data_Report.pdf");
+      pdf.save("Custom_Data_Report.pdf");
     }
 
-    // Front-end interaction
-    let selectedStartDate = null;
-    let selectedEndDate = null;
-
-    flatpickr("#start-date-picker", {
-      onChange: (dates) => {
-        selectedStartDate = dates[0];
-      },
-    });
-
-    flatpickr("#end-date-picker", {
-      onChange: (dates) => {
-        selectedEndDate = dates[0];
-      },
-    });
+    function removeList(index) {
+      downloadLists.splice(index, 1);
+      updatePreview();
+    }
 
     document.getElementById("filter-data").addEventListener("click", () => {
       if (!selectedStartDate || !selectedEndDate) {
@@ -202,36 +171,27 @@
         return;
       }
 
-      const filteredData = filterDataByDate(
-        dataSet,
-        selectedStartDate,
-        selectedEndDate
-      );
-
+      const filteredData = filterDataByDate(dataSet, selectedStartDate, selectedEndDate);
       displayFilteredData(filteredData);
-      
-      // Show the "Download PDF" button once data is filtered and displayed
-      document.getElementById("generate-pdf").style.display = "inline-block";
+    });
+
+    document.getElementById("add-to-list").addEventListener("click", () => {
+      const editableData = document.getElementById("editable-json").value.trim();
+      if (!editableData) {
+        alert("No data to add.");
+        return;
+      }
+
+      downloadLists.push(editableData);
+      updatePreview();
     });
 
     document.getElementById("generate-pdf").addEventListener("click", () => {
-      if (!selectedStartDate || !selectedEndDate) {
-        alert("Please select both start and end dates.");
+      if (downloadLists.length === 0) {
+        alert("No data to download.");
         return;
       }
-
-      const filteredData = filterDataByDate(
-        dataSet,
-        selectedStartDate,
-        selectedEndDate
-      );
-
-      if (filteredData.length === 0) {
-        alert("No data found for the selected date range.");
-        return;
-      }
-
-      generatePDF(filteredData);
+      generatePDF(downloadLists);
     });
   </script>
 </body>
